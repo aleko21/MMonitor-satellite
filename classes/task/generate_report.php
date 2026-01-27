@@ -4,6 +4,7 @@ namespace local_mmonitor\task;
 defined('MOODLE_INTERNAL') || die();
 
 class generate_report extends \core\task\scheduled_task {
+
     public function get_name() {
         return get_string('task_name', 'local_mmonitor');
     }
@@ -17,12 +18,14 @@ class generate_report extends \core\task\scheduled_task {
         $secret    = get_config('local_mmonitor', 'secret_key');
         $retention = get_config('local_mmonitor', 'log_retention');
 
-        // 2. Calcolo Utenti Concorrenti (ultimi 5 minuti)
+        // 2. Calcolo Utenti Concorrenti
         $fiveminutesago = time() - 300;
         $concurrent_users = $DB->count_records_select('sessions', 'timemodified > ?', [$fiveminutesago]);
 
-        // 3. Raccolta dati Core e Plugin
+        // 3. Raccolta dati
         $pluginman = \core_plugin_manager::instance();
+        $plugins = $pluginman->get_plugins();
+
         $data = [
             'metadata' => [
                 'timestamp' => time(),
@@ -31,12 +34,13 @@ class generate_report extends \core\task\scheduled_task {
             ],
             'server_status' => [
                 'load' => sys_getloadavg(),
-                'concurrent_users' => $concurrent_users, // NUOVO DATO
+                'concurrent_users' => $concurrent_users,
+                'php_version' => phpversion(),
             ],
             'plugins_report' => []
         ];
 
-        foreach ($pluginman->get_plugins() as $type => $list) {
+        foreach ($plugins as $type => $list) {
             foreach ($list as $name => $plugin) {
                 $update_info = $plugin->available_updates();
                 $is_local = (strpos($plugin->rootdir, '/local/') !== false);
@@ -46,35 +50,34 @@ class generate_report extends \core\task\scheduled_task {
                     $data['plugins_report'][] = [
                         'full_name' => $type . '_' . $name,
                         'version'   => $plugin->versiondb,
-                        'display'   => $plugin->displayversion,
+                        'display'   => $plugin->release,
+                        'type'      => $is_local ? 'local' : ($plugin->is_standard() ? 'standard' : 'addon'),
                         'update_available' => $update_info ? $update_info[0]->version : null,
                     ];
                 }
             }
         }
 
-        // 4. Gestione Cartella e File
+        // 4. Gestione Cartella e Scrittura File
         $dir = $CFG->dirroot . '/monitor_data';
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
 
+        // ATTENZIONE: Qui verifichiamo che ci sia il $ davanti a json_content
         $json_content = json_encode($data, JSON_PRETTY_PRINT);
-
-        // Salvataggio file con TIMESTAMP (per lo storico)
+        
         $filename = "status_{$secret}_" . date('Ymd_Hi') . ".json";
-        file_put_contents($dir . '/' . $filename, $json_content);
-
-        // Salvataggio file LATEST (per la VPS)
-        // Usiamo un nome che includa comunque il segreto per sicurezza
         $latest_file = "latest_{$secret}.json";
+
+        file_put_contents($dir . '/' . $filename, $json_content);
         file_put_contents($dir . '/' . $latest_file, $json_content);
 
-        // 5. Blindaggio .htaccess (copre tutti i .json nella cartella)
+        // 5. Blindaggio .htaccess
         $htaccess = "Options -Indexes\n<Files \"*.json\">\n  Require ip $vps_ip\n</Files>";
         file_put_contents($dir . '/.htaccess', $htaccess);
 
-        // 6. Rotazione log vecchi
+        // 6. Pulizia vecchi log
         $files = glob($dir . "/status_{$secret}_*.json");
         foreach ($files as $file) {
             if (time() - filemtime($file) > ($retention * 86400)) {
@@ -82,6 +85,6 @@ class generate_report extends \core\task\scheduled_task {
             }
         }
         
-        \mtrace("MMonitor: Creati " . $filename . " e " . $latest_file . ". Utenti concorrenti: " . $concurrent_users);
+        \mtrace("MMonitor OK: Creati {$filename} e {$latest_file}. Utenti: {$concurrent_users}.");
     }
 }
