@@ -2,27 +2,19 @@
 defined('MOODLE_INTERNAL') || die();
 
 if ($hassiteconfig) {
-    // 1. Creazione Pagina
-    $settings = new admin_settingpage(
-        'local_mmonitor', 
-        get_string('pluginname', 'local_mmonitor')
-    );
+    // Creazione della pagina di impostazioni
+    $settings = new admin_settingpage('local_mmonitor', get_string('pluginname', 'local_mmonitor'));
     $ADMIN->add('server', $settings);
 
-    // 2. Link alla Dashboard
-    // Costruiamo il link HTML usando le stringhe di lingua
+    // --- LINK ALLA DASHBOARD ---
     $url = new moodle_url('/local/mmonitor/index.php');
-    $label = get_string('go_to_dashboard', 'local_mmonitor');
-    $html_link = html_writer::link($url, $label, ['class' => 'btn btn-primary mb-3']);
+    $link = html_writer::link($url, get_string('go_to_dashboard', 'local_mmonitor'), ['class' => 'btn btn-primary mb-3']);
     
-    // Intestazione
-    $settings->add(new admin_setting_heading(
-        'local_mmonitor/dashboard_hdr',
-        get_string('dashboard_title', 'local_mmonitor'),
-        $html_link
-    ));
+    // FIX: Abbiamo dato un nome reale all'intestazione invece di stringa vuota
+    $settings->add(new admin_setting_heading('local_mmonitor/dashboard_hdr', get_string('dashboard', 'local_mmonitor'), $link));
 
-    // 3. IP VPS
+    // --- IMPOSTAZIONI DI SICUREZZA ---
+    
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/vps_ip',
         get_string('vps_ip', 'local_mmonitor'),
@@ -30,7 +22,6 @@ if ($hassiteconfig) {
         '0.0.0.0'
     ));
 
-    // 4. Chiave Segreta
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/secret_key',
         get_string('secret_key', 'local_mmonitor'),
@@ -38,12 +29,11 @@ if ($hassiteconfig) {
         'mmonitor_secret'
     ));
 
-    // 5. Ritenzione Log
-    // Definiamo l'array usando le chiavi del file lingua
+    // Definiamo le opzioni prima per chiarezza
     $options = [
-        7  => get_string('days_7', 'local_mmonitor'),
-        14 => get_string('days_14', 'local_mmonitor'),
-        30 => get_string('days_30', 'local_mmonitor')
+        7  => get_string('7days', 'local_mmonitor'),
+        14 => get_string('14days', 'local_mmonitor'),
+        30 => get_string('30days', 'local_mmonitor')
     ];
 
     $settings->add(new admin_setting_configselect(

@@ -14,54 +14,31 @@ class generate_report extends \core\task\scheduled_task {
         require_once($CFG->libdir . '/adminlib.php');
 
         // 1. Recupero impostazioni
+        $vps_ip    = get_config('local_mmonitor', 'vps_ip');
         $secret    = get_config('local_mmonitor', 'secret_key');
         $retention = get_config('local_mmonitor', 'log_retention');
 
-        // 2. Metriche Server (CPU Locale, RAM, Load)
-        $cpu_local = $this->get_local_cpu_usage();
-        $ram_usage = $this->get_local_ram_usage();
-        $load_avg  = sys_getloadavg(); 
-
-        // 3. Utenti Concorrenti (ultimi 5 min)
+        // 2. Calcolo Utenti Concorrenti
         $fiveminutesago = time() - 300;
-        try {
-            $concurrent_users = $DB->count_records_select('sessions', 'timemodified > ?', [$fiveminutesago]);
-        } catch (\Exception $e) {
-            $concurrent_users = -1;
-        }
+        $concurrent_users = $DB->count_records_select('sessions', 'timemodified > ?', [$fiveminutesago]);
 
-        // 4. Info Core Moodle & Aggiornamenti
-        $core_update_msg = null;
-        try {
-            $pluginman = \core_plugin_manager::instance();
-            $updates = $pluginman->get_available_update_info('core');
-            if (!empty($updates)) {
-                $latest = reset($updates);
-                $core_update_msg = $latest->release;
-            }
-        } catch (\Throwable $e) {
-            $core_update_msg = null;
-        }
-
-        // 5. NUOVO: Monitoraggio Cron & Disco
-        // Cron Delay
-        $lastcron = get_config('tool_task', 'lastcronstart');
-        $cron_delay = time() - $lastcron;
-
-        // Disk Usage (Moodledata)
-        $disk_free = disk_free_space($CFG->dataroot);
-        $disk_total = disk_total_space($CFG->dataroot);
-        $disk_usage_percent = 0;
-        if ($disk_total > 0) {
-            $disk_usage_percent = round((($disk_total - $disk_free) / $disk_total) * 100, 1);
-        }
-        $disk_free_gb = round($disk_free / 1073741824, 1);
-        $disk_total_gb = round($disk_total / 1073741824, 1);
-
-        // 6. Raccolta dati Plugin
+        // 3. Raccolta dati
         $pluginman = \core_plugin_manager::instance();
         $plugins = $pluginman->get_plugins();
-        $plugins_report = [];
+
+        $data = [
+            'metadata' => [
+                'timestamp' => time(),
+                'site_url'  => $CFG->wwwroot,
+                'moodle_release' => $CFG->release,
+            ],
+            'server_status' => [
+                'load' => sys_getloadavg(),
+                'concurrent_users' => $concurrent_users,
+                'php_version' => phpversion(),
+            ],
+            'plugins_report' => []
+        ];
 
         foreach ($plugins as $type => $list) {
             foreach ($list as $name => $plugin) {
@@ -70,7 +47,7 @@ class generate_report extends \core\task\scheduled_task {
                 $is_addon = (!$plugin->is_standard());
 
                 if ($update_info || $is_local || $is_addon) {
-                    $plugins_report[] = [
+                    $data['plugins_report'][] = [
                         'full_name' => $type . '_' . $name,
                         'version'   => $plugin->versiondb,
                         'display'   => $plugin->release,
@@ -81,45 +58,26 @@ class generate_report extends \core\task\scheduled_task {
             }
         }
 
-        // --- COSTRUZIONE ARRAY DATI COMPLETO ---
-        $data = [
-            'metadata' => [
-                'timestamp' => time(),
-                'site_url'  => $CFG->wwwroot,
-                'moodle_release' => $CFG->release,
-                'core_update_available' => $core_update_msg
-            ],
-            'server_status' => [
-                'cpu_local_percent' => $cpu_local,
-                'ram_usage'         => $ram_usage,
-                'load_average'      => $load_avg,
-                'concurrent_users'  => $concurrent_users,
-                'php_version'       => phpversion(),
-                // Nuovi dati vitali
-                'cron_delay_sec'    => $cron_delay,
-                'disk_usage'        => [
-                    'free_gb' => $disk_free_gb,
-                    'total_gb' => $disk_total_gb,
-                    'percent' => $disk_usage_percent
-                ]
-            ],
-            'plugins_report' => $plugins_report
-        ];
-
-        // 7. Salvataggio File in MOODLEDATA (Sicuro)
-        $dir = $CFG->dataroot . '/mmonitor_data';
+        // 4. Gestione Cartella e Scrittura File
+        $dir = $CFG->dirroot . '/monitor_data';
         if (!is_dir($dir)) {
-            mkdir($dir, 0700, true);
+            mkdir($dir, 0755, true);
         }
 
+        // ATTENZIONE: Qui verifichiamo che ci sia il $ davanti a json_content
         $json_content = json_encode($data, JSON_PRETTY_PRINT);
+        
         $filename = "status_{$secret}_" . date('Ymd_Hi') . ".json";
         $latest_file = "latest_{$secret}.json";
 
         file_put_contents($dir . '/' . $filename, $json_content);
         file_put_contents($dir . '/' . $latest_file, $json_content);
 
-        // 8. Pulizia Log Vecchi
+        // 5. Blindaggio .htaccess
+        $htaccess = "Options -Indexes\n<Files \"*.json\">\n  Require ip $vps_ip\n</Files>";
+        file_put_contents($dir . '/.htaccess', $htaccess);
+
+        // 6. Pulizia vecchi log
         $files = glob($dir . "/status_{$secret}_*.json");
         foreach ($files as $file) {
             if (time() - filemtime($file) > ($retention * 86400)) {
@@ -127,42 +85,6 @@ class generate_report extends \core\task\scheduled_task {
             }
         }
         
-        \mtrace("MMonitor Report Generato in Moodledata. CPU: " . ($cpu_local ?? 'N/A') . "%, Disk: {$disk_usage_percent}%");
-    }
-
-    /**
-     * Funzione privata per calcolo CPU Locale (Container)
-     */
-    private function get_local_cpu_usage() {
-        if (!function_exists('shell_exec')) return null;
-        $output = shell_exec('ps ax -o pcpu --no-headers');
-        if (empty($output)) return null;
-        
-        $lines = explode("\n", trim($output));
-        $total_cpu = 0.0;
-        foreach ($lines as $line) {
-            $total_cpu += floatval($line);
-        }
-        return round($total_cpu, 1);
-    }
-
-    /**
-     * Funzione privata per calcolo RAM
-     */
-    private function get_local_ram_usage() {
-        if (!function_exists('shell_exec')) return null;
-        $output = shell_exec('free -m | grep Mem');
-        if (empty($output)) return null;
-
-        $parts = preg_split('/\s+/', trim($output));
-        
-        if (isset($parts[1]) && isset($parts[2]) && $parts[1] > 0) {
-            return [
-                'total' => (int)$parts[1],
-                'used'  => (int)$parts[2],
-                'percent' => round(($parts[2] / $parts[1]) * 100, 1)
-            ];
-        }
-        return null;
+        \mtrace("MMonitor OK: Creati {$filename} e {$latest_file}. Utenti: {$concurrent_users}.");
     }
 }
