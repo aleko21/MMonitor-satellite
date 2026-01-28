@@ -5,17 +5,16 @@ if ($hassiteconfig) {
     // Creiamo la pagina delle impostazioni
     $settings = new admin_settingpage('local_mmonitor', get_string('pluginname', 'local_mmonitor'));
 
-    // MODIFICA QUI: 'server' invece di 'localplugins'
-    // Questo sposta il link dal tab "Plugin" al tab "Server"
+    // Posizioniamo il plugin sotto il tab "Server"
     $ADMIN->add('server', $settings);
 
     // 1. Secret Key
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/secret_key',
         'Secret Key',
-        'Chiave segreta per proteggere l\'accesso esterno ai file JSON. Usa una stringa complessa.',
+        'Chiave segreta per proteggere l\'accesso esterno ai file JSON. Puoi usare lettere, numeri e simboli (es. _ - .).',
         '', 
-        PARAM_ALPHANUM
+        PARAM_TEXT // <--- MODIFICA: Ora accetta anche simboli come _
     ));
 
     // 2. VPS IP (Whitelist) - Supporto Multi-IP
