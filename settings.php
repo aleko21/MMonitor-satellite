@@ -1,56 +1,38 @@
 <?php
-defined('MOODLE_INTERNAL') || die();
+defined('MOODLE_INTERNAL') || die;
 
 if ($hassiteconfig) {
-    // 1. Creazione Pagina
-    $settings = new admin_settingpage(
-        'local_mmonitor', 
-        get_string('pluginname', 'local_mmonitor')
-    );
+    // Creiamo la pagina delle impostazioni
+    $settings = new admin_settingpage('local_mmonitor', get_string('pluginname', 'local_mmonitor'));
+
+    // MODIFICA QUI: 'server' invece di 'localplugins'
+    // Questo sposta il link dal tab "Plugin" al tab "Server"
     $ADMIN->add('server', $settings);
 
-    // 2. Link alla Dashboard
-    // Costruiamo il link HTML usando le stringhe di lingua
-    $url = new moodle_url('/local/mmonitor/index.php');
-    $label = get_string('go_to_dashboard', 'local_mmonitor');
-    $html_link = html_writer::link($url, $label, ['class' => 'btn btn-primary mb-3']);
-    
-    // Intestazione
-    $settings->add(new admin_setting_heading(
-        'local_mmonitor/dashboard_hdr',
-        get_string('dashboard_title', 'local_mmonitor'),
-        $html_link
-    ));
-
-    // 3. IP VPS
-    $settings->add(new admin_setting_configtext(
-        'local_mmonitor/vps_ip',
-        get_string('vps_ip', 'local_mmonitor'),
-        get_string('vps_ip_desc', 'local_mmonitor'),
-        '0.0.0.0'
-    ));
-
-    // 4. Chiave Segreta
+    // 1. Secret Key
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/secret_key',
-        get_string('secret_key', 'local_mmonitor'),
-        get_string('secret_key_desc', 'local_mmonitor'),
-        'mmonitor_secret'
+        'Secret Key',
+        'Chiave segreta per proteggere l\'accesso esterno ai file JSON. Usa una stringa complessa.',
+        '', 
+        PARAM_ALPHANUM
     ));
 
-    // 5. Ritenzione Log
-    // Definiamo l'array usando le chiavi del file lingua
-    $options = [
-        7  => get_string('days_7', 'local_mmonitor'),
-        14 => get_string('days_14', 'local_mmonitor'),
-        30 => get_string('days_30', 'local_mmonitor')
-    ];
+    // 2. VPS IP (Whitelist) - Supporto Multi-IP
+    $settings->add(new admin_setting_configtext(
+        'local_mmonitor/vps_ip',
+        'IP Autorizzati (Whitelist)',
+        'Inserisci gli indirizzi IP autorizzati a scaricare i dati. <strong>Puoi inserirne più di uno separandoli con una virgola</strong> (es: <code>192.168.1.5, 10.0.0.2</code>).<br>Usa <code>0.0.0.0</code> per disabilitare il controllo IP (Sconsigliato).',
+        '0.0.0.0',
+        PARAM_TEXT // Accetta virgole e spazi
+    ));
 
+    // 3. Log Retention
     $settings->add(new admin_setting_configselect(
         'local_mmonitor/log_retention',
-        get_string('log_retention', 'local_mmonitor'),
-        get_string('log_retention_desc', 'local_mmonitor'),
+        'Ritenzione Log (Giorni)',
+        'Per quanti giorni conservare i file JSON storici nel server?',
         7,
-        $options
+        [1 => '1 Giorno', 3 => '3 Giorni', 7 => '7 Giorni', 30 => '30 Giorni']
     ));
 }
