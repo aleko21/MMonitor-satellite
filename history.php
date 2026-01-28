@@ -19,35 +19,52 @@ $PAGE->set_heading('Analisi Storica Performance');
 echo $OUTPUT->header();
 ?>
 <style>
-    /* CSS per i contenitori grafici */
-    .mmonitor-chart-container {
+    /* --- FIX LAYOUT GRAFICI --- */
+
+    /* 1. Il Contenitore Esterno (La Scatola) */
+    /* Diamo un'altezza fissa e generosa. overflow:visible è CRUCIALE. */
+    .mmonitor-chart-wrapper-large {
         position: relative;
-        margin: auto;
-        height: 400px;
         width: 100%;
-        overflow: hidden; 
+        height: 500px; /* Molto alto per stare sicuri */
+        overflow: visible !important; 
+        margin-bottom: 30px;
     }
-    .mmonitor-chart-container-small {
+
+    .mmonitor-chart-wrapper-small {
         position: relative;
-        margin: auto;
-        height: 300px;
         width: 100%;
-        overflow: hidden;
+        height: 400px; /* Altezza standard */
+        overflow: visible !important;
+        margin-bottom: 30px;
     }
-    .mmonitor-chart-container canvas {
-        max-width: 100% !important;
-        max-height: 100% !important;
+
+    /* 2. Il Grafico (Il Canvas) */
+    /* TRUCCO: Forziamo il canvas a essere PIÙ BASSO del contenitore.
+       Questo lascia uno spazio vuoto fisico in basso per le etichette. */
+    .mmonitor-chart-wrapper-large canvas {
+        max-height: 450px !important; /* 50px meno del contenitore */
+        width: 100% !important;
     }
-    /* Stile per la tabella dati grezzi */
+
+    .mmonitor-chart-wrapper-small canvas {
+        max-height: 350px !important; /* 50px meno del contenitore */
+        width: 100% !important;
+    }
+
+    /* Assicuriamoci che Moodle non nasconda nulla */
+    .card-body {
+        overflow: visible !important;
+    }
+
+    /* Stile tabella */
     .mmonitor-data-table-container {
         max-height: 500px;
         overflow-y: auto;
         border: 1px solid #dee2e6;
     }
-    /* NUOVO: Nasconde il link standard "Show chart data" di Moodle */
-    .chart-table-expand {
-        display: none !important;
-    }
+    
+    .chart-table-expand { display: none !important; }
 </style>
 
 <?php $dashboard_url = new moodle_url('/local/mmonitor/index.php'); ?>
@@ -70,9 +87,9 @@ echo $OUTPUT->header();
 </div>
 
 <?php
-// 4. Recupero Dati (Da MOODLEDATA)
+// 4. Recupero Dati
 $secret = get_config('local_mmonitor', 'secret_key');
-$dir = $CFG->dataroot . '/mmonitor_data'; // Percorso sicuro
+$dir = $CFG->dataroot . '/mmonitor_data'; 
 $files = glob($dir . "/status_{$secret}_*.json");
 
 $data_points = [];
@@ -128,7 +145,7 @@ if (empty($data_points)) {
     echo $OUTPUT->notification('Nessun dato trovato per il periodo selezionato.', 'warning');
 } else {
 
-    // --- 1. GRAFICO CORRELAZIONE ---
+    // 1. CORRELAZIONE
     $chart_combo = new \core\chart_line();
     $chart_combo->set_title('Visione d\'Insieme');
     $chart_combo->set_labels($labels);
@@ -154,7 +171,7 @@ if (empty($data_points)) {
     $s_ram->set_smooth(false);
     $chart_combo->add_series($s_ram);
 
-    // --- 2. DETTAGLIO HARDWARE ---
+    // 2. HARDWARE
     $chart_hw = new \core\chart_line();
     $chart_hw->set_title('Dettaglio Hardware');
     $chart_hw->set_labels($labels);
@@ -172,7 +189,7 @@ if (empty($data_points)) {
     $s_ram_hw->set_smooth(false);
     $chart_hw->add_series($s_ram_hw);
 
-    // --- 3. DETTAGLIO UTENTI ---
+    // 3. UTENTI
     $chart_users = new \core\chart_line();
     $chart_users->set_title('Traffico Utenti');
     $chart_users->set_labels($labels);
@@ -199,7 +216,7 @@ if (empty($data_points)) {
                         <span class="badge badge-light border">Ultimi <?php echo $periods[$period_days]; ?></span>
                     </div>
                     <div class="card-body p-3">
-                        <div class="mmonitor-chart-container">
+                        <div class="mmonitor-chart-wrapper-large">
                             <?php echo $OUTPUT->render($chart_combo); ?>
                         </div>
                     </div>
@@ -214,7 +231,7 @@ if (empty($data_points)) {
                         <h5 class="m-0 font-weight-bold" style="color: #002366;">Carico Sistema (CPU/RAM)</h5>
                     </div>
                     <div class="card-body p-3">
-                        <div class="mmonitor-chart-container-small">
+                        <div class="mmonitor-chart-wrapper-small">
                             <?php echo $OUTPUT->render($chart_hw); ?>
                         </div>
                     </div>
@@ -227,7 +244,7 @@ if (empty($data_points)) {
                         <h5 class="m-0 font-weight-bold" style="color: #198754;">Traffico Utenti</h5>
                     </div>
                     <div class="card-body p-3">
-                        <div class="mmonitor-chart-container-small">
+                        <div class="mmonitor-chart-wrapper-small">
                             <?php echo $OUTPUT->render($chart_users); ?>
                         </div>
                     </div>
@@ -273,7 +290,6 @@ if (empty($data_points)) {
                 </div>
             </div>
         </div>
-
     </div>
     <?php
 }
