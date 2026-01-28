@@ -19,14 +19,14 @@ $PAGE->set_heading('Analisi Storica Performance');
 echo $OUTPUT->header();
 ?>
 <style>
-    /* --- FIX LAYOUT GRAFICI --- */
+    /* --- FIX DEFINITIVO LAYOUT GRAFICI --- */
 
-    /* 1. Il Contenitore Esterno (La Scatola) */
-    /* Diamo un'altezza fissa e generosa. overflow:visible è CRUCIALE. */
+    /* 1. Il Contenitore Esterno */
+    /* Altezza fissa e overflow visibile per non tagliare le etichette */
     .mmonitor-chart-wrapper-large {
         position: relative;
         width: 100%;
-        height: 500px; /* Molto alto per stare sicuri */
+        height: 500px; 
         overflow: visible !important; 
         margin-bottom: 30px;
     }
@@ -34,30 +34,36 @@ echo $OUTPUT->header();
     .mmonitor-chart-wrapper-small {
         position: relative;
         width: 100%;
-        height: 400px; /* Altezza standard */
+        height: 400px; 
         overflow: visible !important;
         margin-bottom: 30px;
     }
 
-    /* 2. Il Grafico (Il Canvas) */
-    /* TRUCCO: Forziamo il canvas a essere PIÙ BASSO del contenitore.
-       Questo lascia uno spazio vuoto fisico in basso per le etichette. */
+    /* 2. Il Grafico (Canvas) */
+    /* TRUCCO: Forziamo il canvas ad essere PIÙ BASSO del contenitore.
+       I 50px di differenza (500px vs 450px) sono lo spazio vitale per le date ruotate. */
     .mmonitor-chart-wrapper-large canvas {
-        max-height: 450px !important; /* 50px meno del contenitore */
+        max-height: 450px !important;
         width: 100% !important;
     }
 
     .mmonitor-chart-wrapper-small canvas {
-        max-height: 350px !important; /* 50px meno del contenitore */
+        max-height: 350px !important;
         width: 100% !important;
     }
 
-    /* Assicuriamoci che Moodle non nasconda nulla */
+    /* Override per evitare che i temi forzino larghezze strane (es. 46vw) */
+    .chart-area, .chart-image {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* Moodle UI fix */
     .card-body {
         overflow: visible !important;
     }
 
-    /* Stile tabella */
+    /* Tabella Dati */
     .mmonitor-data-table-container {
         max-height: 500px;
         overflow-y: auto;
