@@ -6,28 +6,23 @@ if ($hassiteconfig) {
     // -------------------------------------------------------------------------
     // 1. LINK DIRETTO NEL MENU (Voce "MMonitor Dashboard")
     // -------------------------------------------------------------------------
-    // Questo aggiunge una voce cliccabile direttamente nel menu Server
     $ADMIN->add('server', new admin_externalpage(
-        'local_mmonitor_dashboard', // Nome univoco interno
-        get_string('pluginname', 'local_mmonitor') . ' - Dashboard', // Etichetta Menu
-        new moodle_url('/local/mmonitor/index.php') // Dove porta il link
+        'local_mmonitor_dashboard',
+        get_string('pluginname', 'local_mmonitor') . ' - Dashboard',
+        new moodle_url('/local/mmonitor/index.php')
     ));
 
-
     // -------------------------------------------------------------------------
-    // 2. PAGINA CONFIGURAZIONE (Voce "MMonitor Settings")
+    // 2. PAGINA CONFIGURAZIONE
     // -------------------------------------------------------------------------
     $settings = new admin_settingpage(
         'local_mmonitor', 
         get_string('pluginname', 'local_mmonitor') . ' - Configurazione'
     );
     
-    // Aggiungiamo la pagina sotto "Server"
     $ADMIN->add('server', $settings);
 
-
     // --- PULSANTE DI NAVIGAZIONE INTERNO ---
-    // Aggiungiamo un "finto" titolo che in realtà è un pulsante HTML per andare alla Dashboard
     $dashboard_url = new moodle_url('/local/mmonitor/index.php');
     $button_html = html_writer::link($dashboard_url, '<i class="fa fa-tachometer"></i> APRI DASHBOARD LIVE', [
         'class' => 'btn btn-primary btn-lg',
@@ -36,27 +31,26 @@ if ($hassiteconfig) {
 
     $settings->add(new admin_setting_heading(
         'local_mmonitor/header_nav',
-        '', // Nessun titolo testuale
-        $button_html // Mostriamo il pulsante HTML
+        '', 
+        $button_html
     ));
-
 
     // --- IMPOSTAZIONI ---
 
-    // 1. Secret Key
+    // 1. Secret Key (CORRETTO: PARAM_TEXT per accettare underscore e simboli)
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/secret_key',
         'Secret Key',
-        'Chiave segreta per proteggere l\'accesso esterno ai file JSON. Usa una stringa complessa.',
+        'Chiave segreta per proteggere l\'accesso esterno. Puoi usare lettere, numeri e simboli (es. mmonitor_secret).',
         '', 
-        PARAM_ALPHANUM
+        PARAM_TEXT // <--- MODIFICA QUI: Era PARAM_ALPHANUM
     ));
 
     // 2. VPS IP (Whitelist)
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/vps_ip',
         'IP Autorizzati (Whitelist)',
-        'Inserisci gli indirizzi IP autorizzati a scaricare i dati. <strong>Puoi inserirne più di uno separandoli con una virgola</strong> (es: <code>192.168.1.5, 10.0.0.2</code>).<br>Usa <code>0.0.0.0</code> per disabilitare il controllo IP (Sconsigliato).',
+        'Inserisci gli indirizzi IP autorizzati a scaricare i dati. <strong>Puoi inserirne più di uno separandoli con una virgola</strong>.<br>Usa <code>0.0.0.0</code> per disabilitare il controllo IP (Sconsigliato).',
         '0.0.0.0',
         PARAM_TEXT
     ));
