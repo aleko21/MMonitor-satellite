@@ -44,8 +44,11 @@ $load_display = $load_fallback ? implode(' / ', $load_fallback) : 'N/A';
 
 $fiveminutesago = time() - 300;
 try {
-    $users_live = $DB->count_records_select('sessions', 'timemodified > ?', [$fiveminutesago]);
-} catch (Exception $e) { $users_live = '?'; }
+    // MODIFICA: Aggiunto "AND userid > 0" per contare solo gli utenti loggati (escludendo guest/login page)
+    $users_live = $DB->count_records_select('sessions', 'timemodified > ? AND userid > 0', [$fiveminutesago]);
+} catch (Exception $e) { 
+    $users_live = '?'; 
+}
 
 $moodle_release = $CFG->release;
 $php_version = phpversion();
