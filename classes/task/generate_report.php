@@ -22,10 +22,11 @@ class generate_report extends \core\task\scheduled_task {
         $ram_usage = $this->get_local_ram_usage();
         $load_avg  = sys_getloadavg(); 
 
-        // 3. Utenti Concorrenti (ultimi 5 min)
+       // 3. Utenti Concorrenti (ultimi 5 min)
         $fiveminutesago = time() - 300;
         try {
-            $concurrent_users = $DB->count_records_select('sessions', 'timemodified > ?', [$fiveminutesago]);
+            // MODIFICA: Aggiunto "AND userid > 0" per contare solo chi ha fatto login
+            $concurrent_users = $DB->count_records_select('sessions', 'timemodified > ? AND userid > 0', [$fiveminutesago]);
         } catch (\Exception $e) {
             $concurrent_users = -1;
         }
