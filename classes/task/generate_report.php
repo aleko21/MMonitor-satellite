@@ -31,17 +31,63 @@ class generate_report extends \core\task\scheduled_task {
             $concurrent_users = -1;
         }
 
-        // 4. Info Core Moodle & Aggiornamenti
+   // 4. Info Core Moodle & Aggiornamenti (UNIVERSALE)
         $core_update_msg = null;
+        
         try {
-            $pluginman = \core_plugin_manager::instance();
-            $updates = $pluginman->get_available_update_info('core');
-            if (!empty($updates)) {
-                $latest = reset($updates);
-                $core_update_msg = $latest->release;
+            // --- TENTATIVO 1: Standard Moderno (core -> available_updates) ---
+            $raw_updates = get_config('core', 'available_updates');
+            if ($raw_updates) {
+                $updates = unserialize($raw_updates);
+                if (!empty($updates) && is_array($updates)) {
+                    foreach ($updates as $update) {
+                        if (isset($update->version)) {
+                            $core_update_msg = $update->release . ' (' . $update->version . ')';
+                            break; 
+                        }
+                    }
+                }
             }
+            
+            // --- TENTATIVO 2: Fallback Compatibilità (core_plugin -> recentresponse) ---
+            // Questo è quello che serve al tuo server 4.0.10!
+            if (empty($core_update_msg)) {
+                $raw_response = get_config('core_plugin', 'recentresponse');
+                if ($raw_response) {
+                    // Di solito è JSON, ma a volte è un oggetto serializzato
+                    $data = json_decode($raw_response);
+                    if (json_last_error() !== JSON_ERROR_NONE) {
+                        $data = unserialize($raw_response);
+                    }
+                    
+                    // Navighiamo la struttura: updates -> core -> [0]
+                    if (isset($data->updates->core) && is_array($data->updates->core)) {
+                        foreach ($data->updates->core as $update) {
+                            // Controlliamo che sia una versione più nuova di quella installata
+                            if (isset($update->version) && $update->version > $CFG->version) {
+                                $core_update_msg = $update->release . ' (' . $update->version . ')';
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Gestione Errori: Se ancora null, controlliamo se il check è attivo
+            if (empty($core_update_msg)) {
+                $last_fetch = get_config('core', 'last_time_updates_fetched');
+                if (!$last_fetch) $last_fetch = get_config('core_plugin', 'recentfetch'); // Fallback anche per il timestamp
+
+                if (empty($last_fetch)) {
+                    $core_update_msg = "Error: Check Failed (No Data)";
+                } elseif (time() - $last_fetch > 172800) {
+                    // Più vecchio di 48 ore
+                    $core_update_msg = "Warning: Stale Data";
+                }
+            }
+
         } catch (\Throwable $e) {
-            $core_update_msg = null;
+            $core_update_msg = "Error: " . $e->getMessage();
         }
 
         // 5. Monitoraggio Cron & Disco
