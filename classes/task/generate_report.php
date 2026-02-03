@@ -31,9 +31,28 @@ class generate_report extends \core\task\scheduled_task {
             $concurrent_users = -1;
         }
 
-   // 4. Info Core Moodle & Aggiornamenti (UNIVERSALE)
+// 4. Info Core Moodle & Aggiornamenti (DISTINZIONE MAJOR/MINOR)
         $core_update_msg = null;
         
+        // Funzione helper per determinare se è Major o Minor
+        // Ritorna: "MAJOR: 4.1.2" oppure "MINOR: 4.0.11"
+        $format_version_msg = function($new_ver_str) use ($CFG) {
+            // Estraiamo la "Branch" corrente (i primi due numeri, es. "4.0")
+            $curr_parts = explode('.', $CFG->release);
+            $curr_branch = (isset($curr_parts[0]) && isset($curr_parts[1])) ? $curr_parts[0] . '.' . $curr_parts[1] : '0.0';
+
+            // Estraiamo la "Branch" nuova
+            $new_parts = explode('.', $new_ver_str);
+            $new_branch = (isset($new_parts[0]) && isset($new_parts[1])) ? $new_parts[0] . '.' . $new_parts[1] : '0.0';
+
+            // Confrontiamo le versioni
+            if (version_compare($new_branch, $curr_branch, '>')) {
+                return "MAJOR: " . $new_ver_str;
+            } else {
+                return "MINOR: " . $new_ver_str;
+            }
+        };
+
         try {
             // --- TENTATIVO 1: Standard Moderno (core -> available_updates) ---
             $raw_updates = get_config('core', 'available_updates');
@@ -42,7 +61,8 @@ class generate_report extends \core\task\scheduled_task {
                 if (!empty($updates) && is_array($updates)) {
                     foreach ($updates as $update) {
                         if (isset($update->version)) {
-                            $core_update_msg = $update->release . ' (' . $update->version . ')';
+                            // USIAMO LA NUOVA LOGICA DI FORMATTAZIONE
+                            $core_update_msg = $format_version_msg($update->release);
                             break; 
                         }
                     }
@@ -50,22 +70,19 @@ class generate_report extends \core\task\scheduled_task {
             }
             
             // --- TENTATIVO 2: Fallback Compatibilità (core_plugin -> recentresponse) ---
-            // Questo è quello che serve al tuo server 4.0.10!
             if (empty($core_update_msg)) {
                 $raw_response = get_config('core_plugin', 'recentresponse');
                 if ($raw_response) {
-                    // Di solito è JSON, ma a volte è un oggetto serializzato
                     $data = json_decode($raw_response);
                     if (json_last_error() !== JSON_ERROR_NONE) {
                         $data = unserialize($raw_response);
                     }
                     
-                    // Navighiamo la struttura: updates -> core -> [0]
                     if (isset($data->updates->core) && is_array($data->updates->core)) {
                         foreach ($data->updates->core as $update) {
-                            // Controlliamo che sia una versione più nuova di quella installata
                             if (isset($update->version) && $update->version > $CFG->version) {
-                                $core_update_msg = $update->release . ' (' . $update->version . ')';
+                                // USIAMO LA NUOVA LOGICA DI FORMATTAZIONE
+                                $core_update_msg = $format_version_msg($update->release);
                                 break;
                             }
                         }
@@ -73,15 +90,14 @@ class generate_report extends \core\task\scheduled_task {
                 }
             }
 
-            // Gestione Errori: Se ancora null, controlliamo se il check è attivo
+            // Gestione Errori / Cache Vecchia
             if (empty($core_update_msg)) {
                 $last_fetch = get_config('core', 'last_time_updates_fetched');
-                if (!$last_fetch) $last_fetch = get_config('core_plugin', 'recentfetch'); // Fallback anche per il timestamp
+                if (!$last_fetch) $last_fetch = get_config('core_plugin', 'recentfetch'); 
 
                 if (empty($last_fetch)) {
                     $core_update_msg = "Error: Check Failed (No Data)";
                 } elseif (time() - $last_fetch > 172800) {
-                    // Più vecchio di 48 ore
                     $core_update_msg = "Warning: Stale Data";
                 }
             }
