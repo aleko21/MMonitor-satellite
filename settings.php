@@ -37,13 +37,13 @@ if ($hassiteconfig) {
 
     // --- IMPOSTAZIONI ---
 
-    // 1. Secret Key (CORRETTO: PARAM_TEXT per accettare underscore e simboli)
+    // 1. Secret Key 
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/secret_key',
         'Secret Key',
         'Chiave segreta per proteggere l\'accesso esterno. Puoi usare lettere, numeri e simboli (es. mmonitor_secret).',
         '', 
-        PARAM_TEXT // <--- MODIFICA QUI: Era PARAM_ALPHANUM
+        PARAM_ALPHANUMEXT 
     ));
 
     // 2. VPS IP (Whitelist)

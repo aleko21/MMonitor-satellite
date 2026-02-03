@@ -32,7 +32,7 @@ if (!$access_granted) {
 }
 
 // 4. Controllo Segreto (Passato via GET)
-$secret = optional_param('secret', '', PARAM_ALPHANUM);
+$secret = optional_param('secret', '', PARAM_ALPHANUMEXT);
 
 if ($secret !== $expected_secret) {
     header('HTTP/1.0 401 Unauthorized');
