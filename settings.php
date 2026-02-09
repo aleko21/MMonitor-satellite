@@ -1,66 +1,68 @@
 <?php
-defined('MOODLE_INTERNAL') || die;
+defined('MOODLE_INTERNAL') || die();
 
-if ($hassiteconfig) {
-    
-    // -------------------------------------------------------------------------
-    // 1. LINK DIRETTO NEL MENU (Voce "MMonitor Dashboard")
-    // -------------------------------------------------------------------------
-    $ADMIN->add('server', new admin_externalpage(
-        'local_mmonitor_dashboard',
-        get_string('pluginname', 'local_mmonitor') . ' - Dashboard',
-        new moodle_url('/local/mmonitor/index.php')
-    ));
+if ($ADMIN->fulltree) {
 
-    // -------------------------------------------------------------------------
-    // 2. PAGINA CONFIGURAZIONE
-    // -------------------------------------------------------------------------
-    $settings = new admin_settingpage(
-        'local_mmonitor', 
-        get_string('pluginname', 'local_mmonitor') . ' - Configurazione'
-    );
-    
-    $ADMIN->add('server', $settings);
-
-    // --- PULSANTE DI NAVIGAZIONE INTERNO ---
-    $dashboard_url = new moodle_url('/local/mmonitor/index.php');
-    $button_html = html_writer::link($dashboard_url, '<i class="fa fa-tachometer"></i> APRI DASHBOARD LIVE', [
-        'class' => 'btn btn-primary btn-lg',
-        'style' => 'margin-bottom: 20px; width: 100%; text-align:center; font-weight:bold;'
-    ]);
-
+    // --- 1. CONFIGURAZIONE GENERALE ---
     $settings->add(new admin_setting_heading(
-        'local_mmonitor/header_nav',
-        '', 
-        $button_html
+        'local_mmonitor/general_settings',
+        get_string('general_settings', 'local_mmonitor'),
+        ''
     ));
 
-    // --- IMPOSTAZIONI ---
-
-    // 1. Secret Key 
-    $settings->add(new admin_setting_configtext(
+    $settings->add(new admin_setting_configpasswordunmask(
         'local_mmonitor/secret_key',
-        'Secret Key',
-        'Chiave segreta per proteggere l\'accesso esterno. Puoi usare lettere, numeri e simboli (es. mmonitor_secret).',
-        '', 
-        PARAM_ALPHANUMEXT 
+        get_string('secret_key', 'local_mmonitor'),
+        get_string('secret_key_desc', 'local_mmonitor'),
+        ''
     ));
 
-    // 2. VPS IP (Whitelist)
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/vps_ip',
-        'IP Autorizzati (Whitelist)',
-        'Inserisci gli indirizzi IP autorizzati a scaricare i dati. <strong>Puoi inserirne più di uno separandoli con una virgola</strong>.<br>Usa <code>0.0.0.0</code> per disabilitare il controllo IP (Sconsigliato).',
-        '0.0.0.0',
+        get_string('vps_ip', 'local_mmonitor'),
+        get_string('vps_ip_desc', 'local_mmonitor'),
+        '127.0.0.1',
         PARAM_TEXT
     ));
 
-    // 3. Log Retention
     $settings->add(new admin_setting_configselect(
         'local_mmonitor/log_retention',
-        'Ritenzione Log (Giorni)',
-        'Per quanti giorni conservare i file JSON storici nel server?',
+        get_string('log_retention', 'local_mmonitor'),
+        get_string('log_retention_desc', 'local_mmonitor'),
         7,
-        [1 => '1 Giorno', 3 => '3 Giorni', 7 => '7 Giorni', 30 => '30 Giorni']
+        [
+            1  => get_string('days_1', 'local_mmonitor'),
+            3  => get_string('days_3', 'local_mmonitor'),
+            7  => get_string('days_7', 'local_mmonitor'),
+            14 => get_string('days_14', 'local_mmonitor'),
+            30 => get_string('days_30', 'local_mmonitor')
+        ]
+    ));
+
+    // --- 2. CONFIGURAZIONE AVANZATA RISORSE ---
+    
+    // Il box educativo (HTML incluso nel file di lingua)
+    $settings->add(new admin_setting_heading(
+        'local_mmonitor/advanced_settings',
+        get_string('advanced_settings', 'local_mmonitor'),
+        get_string('advanced_info', 'local_mmonitor') 
+    ));
+
+    // Override RAM
+    $settings->add(new admin_setting_configtext(
+        'local_mmonitor/manual_ram_mb',
+        get_string('manual_ram_mb', 'local_mmonitor'),
+        get_string('manual_ram_mb_desc', 'local_mmonitor'),
+        0,
+        PARAM_INT
+    ));
+
+    // Override Disco
+    $settings->add(new admin_setting_configtext(
+        'local_mmonitor/manual_disk_gb',
+        get_string('manual_disk_gb', 'local_mmonitor'),
+        get_string('manual_disk_gb_desc', 'local_mmonitor'),
+        0,
+        PARAM_INT
     ));
 }
