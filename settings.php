@@ -3,6 +3,15 @@ defined('MOODLE_INTERNAL') || die();
 
 if ($ADMIN->fulltree) {
 
+    // --- FIX: CONTROLLO DI SICUREZZA ---
+    // Se Moodle non ha creato l'oggetto $settings automaticamente, lo creiamo noi manualmente.
+    if (!isset($settings)) {
+        $settings = new admin_settingpage('local_mmonitor', get_string('pluginname', 'local_mmonitor'));
+        // Lo agganciamo alla categoria "Plugin Locali"
+        $ADMIN->add('localplugins', $settings);
+    }
+    // -----------------------------------
+
     // --- 1. CONFIGURAZIONE GENERALE ---
     $settings->add(new admin_setting_heading(
         'local_mmonitor/general_settings',
@@ -40,15 +49,12 @@ if ($ADMIN->fulltree) {
     ));
 
     // --- 2. CONFIGURAZIONE AVANZATA RISORSE ---
-    
-    // Il box educativo (HTML incluso nel file di lingua)
     $settings->add(new admin_setting_heading(
         'local_mmonitor/advanced_settings',
         get_string('advanced_settings', 'local_mmonitor'),
         get_string('advanced_info', 'local_mmonitor') 
     ));
 
-    // Override RAM
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/manual_ram_mb',
         get_string('manual_ram_mb', 'local_mmonitor'),
@@ -57,7 +63,6 @@ if ($ADMIN->fulltree) {
         PARAM_INT
     ));
 
-    // Override Disco
     $settings->add(new admin_setting_configtext(
         'local_mmonitor/manual_disk_gb',
         get_string('manual_disk_gb', 'local_mmonitor'),
