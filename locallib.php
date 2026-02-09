@@ -3,12 +3,8 @@ defined('MOODLE_INTERNAL') || die();
 
 class local_mmonitor_helper {
 
-    /**
-     * Calcola l'utilizzo della CPU.
-     */
     public static function get_cpu_usage() {
         if (!function_exists('shell_exec')) return 0.0;
-        
         $output = shell_exec('ps ax -o pcpu --no-headers');
         if (empty($output)) return 0.0;
         
@@ -20,10 +16,6 @@ class local_mmonitor_helper {
         return round($total_cpu, 1);
     }
 
-    /**
-     * Calcola l'utilizzo della RAM.
-     * Priorità: 1. Manuale (Settings) -> 2. Cgroups (Docker) -> 3. Standard (Free)
-     */
     public static function get_ram_usage() {
         // 1. Hosting Condiviso (Limite Manuale)
         $manual_limit_mb = (int)get_config('local_mmonitor', 'manual_ram_mb');
@@ -31,9 +23,8 @@ class local_mmonitor_helper {
         if ($manual_limit_mb > 0) {
             if (!function_exists('shell_exec')) return null;
             
-            // Calcola somma RSS dei processi dell'utente corrente
-            // ps -u $(whoami) prende solo i processi dell'utente web
-            $cmd = 'ps -u $(whoami) -o rss | awk \'{sum+=$1} END {print sum/1024}\'';
+            // Somma RSS processi utente (più affidabile per evitare OOM)
+            $cmd = 'ps -u $(whoami) -o rss --no-headers | awk \'{sum+=$1} END {print sum/1024}\'';
             $used_mb = (float)shell_exec($cmd);
             $used_mb = round($used_mb, 0);
             
@@ -44,12 +35,10 @@ class local_mmonitor_helper {
             ];
         }
 
-        // 2. Docker / Container (Cgroups)
+        // 2. Docker / Container
         if (is_readable('/sys/fs/cgroup/memory/memory.limit_in_bytes')) {
             $limit_bytes = (float)file_get_contents('/sys/fs/cgroup/memory/memory.limit_in_bytes');
             $usage_bytes = (float)file_get_contents('/sys/fs/cgroup/memory/memory.usage_in_bytes');
-            
-            // Evitiamo numeri "illimitati" assurdi
             if ($limit_bytes > 0 && $limit_bytes < 100000000000000) {
                 $limit_mb = round($limit_bytes / 1048576);
                 $usage_mb = round($usage_bytes / 1048576);
@@ -61,28 +50,21 @@ class local_mmonitor_helper {
             }
         }
 
-        // 3. Server Standard (free -m)
+        // 3. Server Standard
         if (function_exists('shell_exec')) {
             $output = shell_exec('free -m | grep Mem');
-            if ($output) {
-                $parts = preg_split('/\s+/', trim($output));
-                if (isset($parts[1]) && isset($parts[2]) && $parts[1] > 0) {
-                    return [
-                        'total'   => (int)$parts[1],
-                        'used'    => (int)$parts[2],
-                        'percent' => round(($parts[2] / $parts[1]) * 100, 1)
-                    ];
-                }
+            $parts = preg_split('/\s+/', trim($output));
+            if (isset($parts[1]) && isset($parts[2]) && $parts[1] > 0) {
+                return [
+                    'total'   => (int)$parts[1],
+                    'used'    => (int)$parts[2],
+                    'percent' => round(($parts[2] / $parts[1]) * 100, 1)
+                ];
             }
         }
-
         return null;
     }
 
-    /**
-     * Calcola l'utilizzo del DISCO (Dataroot).
-     * Priorità: 1. Manuale (Quota) -> 2. Standard (Filesystem)
-     */
     public static function get_disk_usage() {
         global $CFG;
 
@@ -92,18 +74,58 @@ class local_mmonitor_helper {
         $free_gb = 0;
         $percent = 0;
 
-        // 1. Hosting Condiviso (Quota Manuale)
+        // --- CASO 1: Hosting Condiviso (Limite Manuale Attivo) ---
         if ($manual_limit_gb > 0) {
             $total_gb = $manual_limit_gb;
-            
             $used_bytes = 0;
+
             if (function_exists('shell_exec')) {
-                // du -sb calcola la dimensione reale della cartella
-                $out = shell_exec("du -sb " . escapeshellarg($CFG->dataroot) . " 2>/dev/null");
-                $used_bytes = (float)intval(preg_split('/\s+/', trim($out))[0]);
+                // TENTATIVO A: Quota (Fallito nel tuo test, ma lo lasciamo per compatibilità futura)
+                $quota_out = shell_exec("quota -u $(whoami) -w 2>/dev/null");
+                if ($quota_out && preg_match_all('/\d+/', $quota_out, $matches)) {
+                    foreach ($matches[0] as $num) {
+                        if ($num > 0) {
+                            $used_bytes = $num * 1024;
+                            break;
+                        }
+                    }
+                }
+
+                // TENTATIVO B: DU su HOME DIRECTORY (La soluzione per te)
+                if ($used_bytes == 0) {
+                    // Cerchiamo di individuare la HOME dell'utente cPanel
+                    // Di solito è /home/username
+                    $path_to_scan = $CFG->dataroot; // Fallback
+
+                    // 1. Proviamo a prendere la HOME dall'ambiente
+                    $env_home = getenv('HOME');
+                    if (!empty($env_home) && is_readable($env_home)) {
+                        $path_to_scan = $env_home;
+                    } 
+                    // 2. Se fallisce, proviamo a dedurla dal percorso di dataroot
+                    // Dataroot: /home/oidcdcmf/test.osel.it/.htm...
+                    // Noi vogliamo: /home/oidcdcmf/
+                    else {
+                        $parts = explode('/', $CFG->dataroot);
+                        // Se il percorso inizia con /home/username...
+                        if (count($parts) > 3 && $parts[1] == 'home') {
+                            $path_to_scan = "/{$parts[1]}/{$parts[2]}"; // Ricostruisce /home/username
+                        }
+                    }
+
+                    // Eseguiamo DU sulla cartella ROOT dell'utente
+                    // Questo includerà: mail, logs, public_html e moodledata
+                    $out = shell_exec("du -sb " . escapeshellarg($path_to_scan) . " 2>/dev/null");
+                    $parts = preg_split('/\s+/', trim($out));
+                    if (isset($parts[0]) && is_numeric($parts[0])) {
+                        $used_bytes = (float)$parts[0];
+                    }
+                }
             }
+            
             $used_gb = round($used_bytes / 1073741824, 1);
             
+            // Calcoli finali
             $free_gb = $total_gb - $used_gb;
             if ($free_gb < 0) $free_gb = 0;
             
@@ -112,7 +134,7 @@ class local_mmonitor_helper {
             }
 
         } else {
-            // 2. Server Standard / Dedicato
+            // --- CASO 2: Server Dedicato (Standard) ---
             $bytes_free = disk_free_space($CFG->dataroot);
             $bytes_total = disk_total_space($CFG->dataroot);
             
